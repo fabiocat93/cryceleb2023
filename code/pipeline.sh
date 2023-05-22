@@ -7,7 +7,11 @@
 #SBATCH --mail-user=fabiocat@mit.edu
 # Set the array variable based on the calculated array size
 #SBATCH --array=0-350%1
-
+#SBATCH -n 1                     # 1 CPU core
+#SBATCH --mem=10G
+#SBATCH --gres=gpu:1
+#SBATCH --constraint=any-gpu
+#SBATCH -x node[103]
 # Execute commands to run your program here. Here is an example of python.
 eval "$(conda shell.bash hook)"
 conda activate fab
@@ -26,6 +30,5 @@ METRIC=${metrics[$metric_index]}
 
 # Print the current task information
 echo "Running task $SLURM_ARRAY_TASK_ID with encoder: $ENCODER and metric: $METRIC"
-
 
 python my_notebook.py --encoder "$ENCODER" --device "gpu" --metric "$METRIC"
