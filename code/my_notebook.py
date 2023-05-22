@@ -89,130 +89,156 @@ test_pairs = pd.read_csv("../data/metadata/test_pairs.csv")
 
 # One way to verify if both pairs come from the same baby is to concatenate all the segments for each pair, compute the embedding of the concatenated cry, and compute the cosine similarity between the embeddings.
 
-if encoder_name == 'ecapa-voxceleb-ft-cryceleb':
-    encoder = SpeakerRecognition.from_hparams(
-        source="Ubenwa/ecapa-voxceleb-ft-cryceleb",
-        savedir=f"../data/models/ecapa-voxceleb-ft-cryceleb",
-        run_opts={"device":my_device} #comment out if no GPU available
-    ).to(my_device)
-    def extract_embeddings(data):
-        return encoder.encode_batch(torch.tensor(data).to(my_device), normalize=False)
-
-elif encoder_name == 'spkrec-ecapa-voxceleb':
-    encoder = SpeakerRecognition.from_hparams(
-        source="speechbrain/spkrec-ecapa-voxceleb",
-        savedir=f"../data/models/spkrec-ecapa-voxceleb",
-        run_opts={"device":my_device} #comment out if no GPU available
-    ).to(my_device)
-    def extract_embeddings(data):
-        return encoder.encode_batch(torch.tensor(data).to(my_device), normalize=False)
-
-elif encoder_name == 'human_cochleagram':
-    encoder = cgram.human_cochleagram
-    def extract_embeddings(data):
-        cochleagram = encoder(data, sample_rate, strict=False, n=40)
-        embeddings = (torch.from_numpy(cochleagram) + torch.finfo().eps).log().squeeze(0)
-        embeddings = embeddings.mean(1) + embeddings.amax(1)
-        embeddings = np.squeeze(embeddings.cpu().detach().numpy())
-        return embeddings
-
-elif encoder_name == 'log-mel-spectrogram':
-    encoder = T.MelSpectrogram(
-                        sample_rate=sample_rate,
-                        n_fft=4096,
-                        win_length=None,
-                        hop_length=512,
-                        n_mels=128,
-                        f_min=5,
-                        f_max=20000,
-                        power=2,
-                        ).to(my_device)
-    def extract_embeddings(data):
-        mel_spectrogram = encoder(torch.tensor(data).to(my_device))
-        embeddings = (mel_spectrogram + torch.finfo().eps).log().squeeze(0)
-        embeddings = embeddings.mean(1) + embeddings.amax(1)
-        embeddings = np.squeeze(embeddings.cpu().detach().numpy())
-        return embeddings
-
-
-elif encoder_name == 'pyannote-embedding':
-    encoder = Model.from_pretrained("pyannote/embedding", use_auth_token=hf_token).to(my_device)
-    inference = Inference(encoder, window="whole")
-    def extract_embeddings(data):
-        return inference({"waveform": torch.unsqueeze(torch.tensor(data), 0).to(my_device), "sample_rate": sample_rate})
-
-elif encoder_name == 'serab_byols':
-    encoder_name = 'cvt'
-    checkpoint_path = serab_byols.__file__.replace('serab_byols/__init__.py', '') + "checkpoints/cvt_s1-d1-e64_s2-d1-e256_s3-d1-e512_BYOLAs64x96-osandbyolaloss6373-e100-bs256-lr0003-rs42.pth"
-    cfg_path = serab_byols.__file__.replace('serab_byols/__init__.py', 'serab_byols/config.yaml')
-    # Load model with weights - located in the root directory of this repo
-    encoder = serab_byols.load_model(checkpoint_path, encoder_name, cfg_path).to(my_device)
-    def extract_embeddings(data):
-        return serab_byols.get_scene_embeddings(torch.unsqueeze(torch.tensor(data), 0).to(my_device), encoder, cfg_path)
-
-elif encoder_name == 'apc' or encoder_name == 'tera':
-    encoder = getattr(s3hub, encoder_name)().to(my_device)
-    encoder.eval()
-    def extract_embeddings(data):
-        embeddings = encoder(torch.unsqueeze(torch.tensor(data), 0).to(my_device))["last_hidden_state"]
-        embeddings = embeddings.mean(1) + embeddings.amax(1)
-        embeddings = np.squeeze(embeddings.cpu().detach().numpy())
-        return embeddings
-
-elif encoder_name.startswith('hubert'):
-    layer_number = int(encoder_name.split('_')[1])
-    weights_file = 'facebook/hubert-xlarge-ll60k'
-    pathlib.Path('../data/models/huggingface/').mkdir(parents=True, exist_ok=True)
-    encoder = AutoModelForAudioClassification.from_pretrained(weights_file, cache_dir='../data/models/huggingface/').to(my_device)
-    def extract_embeddings(data):
-        output = encoder(torch.unsqueeze(torch.tensor(data), 0).to(my_device), output_hidden_states=True)
-        embeddings = output.hidden_states[layer_number]
-        embeddings = embeddings.mean(1) + embeddings.amax(1)
-        embeddings = np.squeeze(embeddings.cpu().detach().numpy())
-        return embeddings
-
-elif encoder_name.startswith('wav2vec2'):
-    layer_number = int(encoder_name.split('_')[1])
-    weights_file = 'facebook/wav2vec2-large-960h-lv60-self'
-    pathlib.Path('../data/models/huggingface/').mkdir(parents=True, exist_ok=True)
-    encoder = AutoModelForAudioClassification.from_pretrained(weights_file, cache_dir='../data/models/huggingface/').to(my_device)
-    def extract_embeddings(data):
-        output = encoder(torch.unsqueeze(torch.tensor(data), 0).to(my_device), output_hidden_states=True)
-        embeddings = output.hidden_states[layer_number]
-        embeddings = embeddings.mean(1) + embeddings.amax(1)
-        embeddings = np.squeeze(embeddings.cpu().detach().numpy())
-        return embeddings
-
-elif encoder_name.startswith('data2vec2'):
-    layer_number = int(encoder_name.split('_')[1])
-    weights_file = 'facebook/data2vec-audio-large-960h'
-    pathlib.Path('../data/models/huggingface/').mkdir(parents=True, exist_ok=True)
-    encoder = AutoModelForAudioClassification.from_pretrained(weights_file, cache_dir='../data/models/huggingface/').to(my_device)
-    def extract_embeddings(data):
-        output = encoder(torch.unsqueeze(torch.tensor(data), 0).to(my_device), output_hidden_states=True)
-        embeddings = output.hidden_states[layer_number]
-        embeddings = embeddings.mean(1) + embeddings.amax(1)
-        embeddings = np.squeeze(embeddings.cpu().detach().numpy())
-        return embeddings
-
-elif encoder_name.startswith('bookbot-wav2vec2-adult-child-cls'):
-    layer_number = int(encoder_name.split('_')[1])
-    weights_file = 'bookbot/wav2vec2-adult-child-cls'
-    pathlib.Path('../data/models/huggingface/').mkdir(parents=True, exist_ok=True)
-    encoder = AutoModelForAudioClassification.from_pretrained(weights_file, cache_dir='../data/models/huggingface/').to(my_device)
-    def extract_embeddings(data):
-        output = encoder(torch.unsqueeze(torch.tensor(data), 0).to(my_device), output_hidden_states=True)
-        embeddings = output.hidden_states[layer_number]
-        embeddings = embeddings.mean(1) + embeddings.amax(1)
-        embeddings = np.squeeze(embeddings.cpu().detach().numpy())
-        return embeddings
-
-
-
-
 # #### Compute Encodings
 embeddings_file = "../data/embeddings/" + encoder_name + ".pkl"
 if not os.path.exists(embeddings_file):
+    if encoder_name == 'ecapa-voxceleb-ft-cryceleb':
+        encoder = SpeakerRecognition.from_hparams(
+            source="Ubenwa/ecapa-voxceleb-ft-cryceleb",
+            savedir=f"../data/models/ecapa-voxceleb-ft-cryceleb",
+            run_opts={"device": my_device}  # comment out if no GPU available
+        ).to(my_device)
+
+
+        def extract_embeddings(data):
+            return encoder.encode_batch(torch.tensor(data).to(my_device), normalize=False)
+
+    elif encoder_name == 'spkrec-ecapa-voxceleb':
+        encoder = SpeakerRecognition.from_hparams(
+            source="speechbrain/spkrec-ecapa-voxceleb",
+            savedir=f"../data/models/spkrec-ecapa-voxceleb",
+            run_opts={"device": my_device}  # comment out if no GPU available
+        ).to(my_device)
+
+
+        def extract_embeddings(data):
+            return encoder.encode_batch(torch.tensor(data).to(my_device), normalize=False)
+
+    elif encoder_name == 'human_cochleagram':
+        encoder = cgram.human_cochleagram
+
+
+        def extract_embeddings(data):
+            cochleagram = encoder(data, sample_rate, strict=False, n=40)
+            embeddings = (torch.from_numpy(cochleagram) + torch.finfo().eps).log().squeeze(0)
+            embeddings = embeddings.mean(1) + embeddings.amax(1)
+            embeddings = np.squeeze(embeddings.cpu().detach().numpy())
+            return embeddings
+
+    elif encoder_name == 'log-mel-spectrogram':
+        encoder = T.MelSpectrogram(
+            sample_rate=sample_rate,
+            n_fft=4096,
+            win_length=None,
+            hop_length=512,
+            n_mels=128,
+            f_min=5,
+            f_max=20000,
+            power=2,
+        ).to(my_device)
+
+
+        def extract_embeddings(data):
+            mel_spectrogram = encoder(torch.tensor(data).to(my_device))
+            embeddings = (mel_spectrogram + torch.finfo().eps).log().squeeze(0)
+            embeddings = embeddings.mean(1) + embeddings.amax(1)
+            embeddings = np.squeeze(embeddings.cpu().detach().numpy())
+            return embeddings
+
+
+    elif encoder_name == 'pyannote-embedding':
+        encoder = Model.from_pretrained("pyannote/embedding", use_auth_token=hf_token).to(my_device)
+        inference = Inference(encoder, window="whole")
+
+
+        def extract_embeddings(data):
+            return inference(
+                {"waveform": torch.unsqueeze(torch.tensor(data), 0).to(my_device), "sample_rate": sample_rate})
+
+    elif encoder_name == 'serab_byols':
+        encoder_name = 'cvt'
+        checkpoint_path = serab_byols.__file__.replace('serab_byols/__init__.py',
+                                                       '') + "checkpoints/cvt_s1-d1-e64_s2-d1-e256_s3-d1-e512_BYOLAs64x96-osandbyolaloss6373-e100-bs256-lr0003-rs42.pth"
+        cfg_path = serab_byols.__file__.replace('serab_byols/__init__.py', 'serab_byols/config.yaml')
+        # Load model with weights - located in the root directory of this repo
+        encoder = serab_byols.load_model(checkpoint_path, encoder_name, cfg_path).to(my_device)
+
+
+        def extract_embeddings(data):
+            return serab_byols.get_scene_embeddings(torch.unsqueeze(torch.tensor(data), 0).to(my_device), encoder,
+                                                    cfg_path)
+
+    elif encoder_name == 'apc' or encoder_name == 'tera':
+        encoder = getattr(s3hub, encoder_name)().to(my_device)
+        encoder.eval()
+
+
+        def extract_embeddings(data):
+            embeddings = encoder(torch.unsqueeze(torch.tensor(data), 0).to(my_device))["last_hidden_state"]
+            embeddings = embeddings.mean(1) + embeddings.amax(1)
+            embeddings = np.squeeze(embeddings.cpu().detach().numpy())
+            return embeddings
+
+    elif encoder_name.startswith('hubert'):
+        layer_number = int(encoder_name.split('_')[1])
+        weights_file = 'facebook/hubert-xlarge-ll60k'
+        pathlib.Path('../data/models/huggingface/').mkdir(parents=True, exist_ok=True)
+        encoder = AutoModelForAudioClassification.from_pretrained(weights_file,
+                                                                  cache_dir='../data/models/huggingface/').to(my_device)
+
+
+        def extract_embeddings(data):
+            output = encoder(torch.unsqueeze(torch.tensor(data), 0).to(my_device), output_hidden_states=True)
+            embeddings = output.hidden_states[layer_number]
+            embeddings = embeddings.mean(1) + embeddings.amax(1)
+            embeddings = np.squeeze(embeddings.cpu().detach().numpy())
+            return embeddings
+
+    elif encoder_name.startswith('wav2vec2'):
+        layer_number = int(encoder_name.split('_')[1])
+        weights_file = 'facebook/wav2vec2-large-960h-lv60-self'
+        pathlib.Path('../data/models/huggingface/').mkdir(parents=True, exist_ok=True)
+        encoder = AutoModelForAudioClassification.from_pretrained(weights_file,
+                                                                  cache_dir='../data/models/huggingface/').to(my_device)
+
+
+        def extract_embeddings(data):
+            output = encoder(torch.unsqueeze(torch.tensor(data), 0).to(my_device), output_hidden_states=True)
+            embeddings = output.hidden_states[layer_number]
+            embeddings = embeddings.mean(1) + embeddings.amax(1)
+            embeddings = np.squeeze(embeddings.cpu().detach().numpy())
+            return embeddings
+
+    elif encoder_name.startswith('data2vec2'):
+        layer_number = int(encoder_name.split('_')[1])
+        weights_file = 'facebook/data2vec-audio-large-960h'
+        pathlib.Path('../data/models/huggingface/').mkdir(parents=True, exist_ok=True)
+        encoder = AutoModelForAudioClassification.from_pretrained(weights_file,
+                                                                  cache_dir='../data/models/huggingface/').to(my_device)
+
+
+        def extract_embeddings(data):
+            output = encoder(torch.unsqueeze(torch.tensor(data), 0).to(my_device), output_hidden_states=True)
+            embeddings = output.hidden_states[layer_number]
+            embeddings = embeddings.mean(1) + embeddings.amax(1)
+            embeddings = np.squeeze(embeddings.cpu().detach().numpy())
+            return embeddings
+
+    elif encoder_name.startswith('bookbot-wav2vec2-adult-child-cls'):
+        layer_number = int(encoder_name.split('_')[1])
+        weights_file = 'bookbot/wav2vec2-adult-child-cls'
+        pathlib.Path('../data/models/huggingface/').mkdir(parents=True, exist_ok=True)
+        encoder = AutoModelForAudioClassification.from_pretrained(weights_file,
+                                                                  cache_dir='../data/models/huggingface/').to(my_device)
+
+
+        def extract_embeddings(data):
+            output = encoder(torch.unsqueeze(torch.tensor(data), 0).to(my_device), output_hidden_states=True)
+            embeddings = output.hidden_states[layer_number]
+            embeddings = embeddings.mean(1) + embeddings.amax(1)
+            embeddings = np.squeeze(embeddings.cpu().detach().numpy())
+            return embeddings
+
     # read the segments
     dev_metadata['cry'] = dev_metadata.apply(lambda row: read_audio(row['file_name']).numpy(), axis=1)
     # concatenate all segments for each (baby_id, period) group
