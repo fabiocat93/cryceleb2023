@@ -79,10 +79,10 @@ sample_submission = pd.read_csv("../data/metadata/sample_submission.csv") # scor
 dev_pairs = pd.read_csv("../data/metadata/dev_pairs.csv", dtype={'baby_id_B':str, 'baby_id_D':str})
 test_pairs = pd.read_csv("../data/metadata/test_pairs.csv")
 
-display(metadata.head().style.set_caption("metadata").set_table_styles([{'selector': 'caption','props': [('font-size', '20px')]}]))
-display(dev_pairs.head().style.set_caption("dev_pairs").set_table_styles([{'selector': 'caption','props': [('font-size', '20px')]}]))
-display(test_pairs.head().style.set_caption("test_pairs").set_table_styles([{'selector': 'caption','props': [('font-size', '20px')]}]))
-display(sample_submission.head().style.set_caption("sample_submission").set_table_styles([{'selector': 'caption','props': [('font-size', '20px')]}]))
+#display(metadata.head().style.set_caption("metadata").set_table_styles([{'selector': 'caption','props': [('font-size', '20px')]}]))
+#display(dev_pairs.head().style.set_caption("dev_pairs").set_table_styles([{'selector': 'caption','props': [('font-size', '20px')]}]))
+#display(test_pairs.head().style.set_caption("test_pairs").set_table_styles([{'selector': 'caption','props': [('font-size', '20px')]}]))
+#display(sample_submission.head().style.set_caption("sample_submission").set_table_styles([{'selector': 'caption','props': [('font-size', '20px')]}]))
 
 
 # ### Verify Pairs
@@ -262,7 +262,7 @@ elif metric == 'manhattan':
         ).squeeze().item()
 
 dev_pairs['score'] = dev_pairs.apply(lambda row: compute_similarity_score(row=row, cry_dict=cry_dict), axis=1)
-display(dev_pairs.head())
+#display(dev_pairs.head())
 
 def compute_eer_and_plot_verification_scores(pairs_df):
     ''' pairs_df must have 'score' and 'label' columns'''
@@ -312,14 +312,14 @@ for (baby_id, period), d in tqdm(cry_dict_test.items()):
 
 # compute cosine similarity between all pairs
 test_pairs['score'] = test_pairs.apply(lambda row: compute_similarity_score(row=row, cry_dict=cry_dict_test), axis=1)
-display(test_pairs.head())
+#display(test_pairs.head())
 
 #submission must match the 'sample_submission.csv' format exactly
 my_submission= test_pairs[['id', 'score']]
 my_submission_file = f'../data/results/{metric}_{encoder_name}.csv'
 pathlib.Path(os.path.dirname(my_submission_file)).mkdir(parents=True, exist_ok=True)
 my_submission.to_csv(my_submission_file, index=False)
-display(my_submission.head())
+#display(my_submission.head())
 
 
 # You can now download `my_submission.csv` and submit it to the challenge!
