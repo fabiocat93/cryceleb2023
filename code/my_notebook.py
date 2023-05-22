@@ -42,8 +42,30 @@ hf_token = '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' #@param {type:"string"}
 
 
 # ### Imports
-get_ipython().run_cell_magic('capture', '', 'import speechbrain as sb\nfrom speechbrain.pretrained import SpeakerRecognition, EncoderClassifier\nfrom speechbrain.dataio.dataio import read_audio\nfrom speechbrain.utils.metric_stats import EER\nimport pandas as pd\nimport numpy as np\nimport torch\nimport pycochleagram.cochleagram as cgram\nimport seaborn as sns\nimport matplotlib.pyplot as plt\nfrom huggingface_hub import hf_hub_download\nfrom tqdm.notebook import tqdm\nimport pickle\nimport os\nimport pathlib\nfrom torchmetrics.functional import pairwise_euclidean_distance, pairwise_manhattan_distance\nfrom csv import writer\nimport torchaudio.transforms as T\nfrom pyannote.audio import Model\nfrom pyannote.audio import Inference\nimport serab_byols\nimport s3prl.hub as s3hub\n#from transformers import Wav2Vec2Model, HubertModel, Data2VecAudioModel\nfrom transformers import AutoProcessor, AutoModelForAudioClassification\n')
-
+import speechbrain as sb
+from speechbrain.pretrained import SpeakerRecognition, EncoderClassifier
+from speechbrain.dataio.dataio import read_audio
+from speechbrain.utils.metric_stats import EER
+import pandas as pd
+import numpy as np
+import torch
+import pycochleagram.cochleagram as cgram
+import seaborn as sns
+import matplotlib.pyplot as plt
+from huggingface_hub import hf_hub_download
+from tqdm.notebook import tqdm
+import pickle
+import os
+import pathlib
+from torchmetrics.functional import pairwise_euclidean_distance, pairwise_manhattan_distance
+from csv import writer
+import torchaudio.transforms as T
+from pyannote.audio import Model
+from pyannote.audio import Inference
+import serab_byols
+import s3prl.hub as s3hub
+#from transformers import Wav2Vec2Model, HubertModel, Data2VecAudioModel
+from transformers import AutoProcessor, AutoModelForAudioClassification
 
 # ### Data
 
@@ -189,7 +211,31 @@ elif encoder_name.startswith('bookbot-wav2vec2-adult-child-cls'):
 
 
 # #### Compute Encodings
-get_ipython().run_cell_magic('time', '', '\nembeddings_file = "../data/embeddings/" + encoder_name + ".pkl"\nif not os.path.exists(embeddings_file):\n    # read the segments\n    dev_metadata[\'cry\'] = dev_metadata.apply(lambda row: read_audio(row[\'file_name\']).numpy(), axis=1)\n    # concatenate all segments for each (baby_id, period) group\n    cry_dict = pd.DataFrame(dev_metadata.groupby([\'baby_id\', \'period\'])[\'cry\'].agg(lambda x: np.concatenate(x.values)), columns=[\'cry\']).to_dict(orient=\'index\')\n    # encode the concatenated cries\n    for (baby_id, period), d in tqdm(cry_dict.items()):\n      d[\'cry_encoded\'] = extract_embeddings(d[\'cry\'])\n    \n    pathlib.Path(os.path.dirname(embeddings_file)).mkdir(parents=True, exist_ok=True)\n    \n    # Iterate through the dictionary and move tensors to CPU\n    for key in cry_dict:\n        for sub_key in cry_dict[key]:\n            if isinstance(cry_dict[key][sub_key], torch.Tensor):\n                cry_dict[key][sub_key] = cry_dict[key][sub_key].to(\'cpu\')\n\n    with open(embeddings_file, \'wb\') as fp:\n        pickle.dump(cry_dict, fp)    \nelse:\n    with open(embeddings_file, \'rb\') as fp:\n        cry_dict = pickle.load(fp)\n')
+embeddings_file = "../data/embeddings/" + encoder_name + ".pkl"
+if not os.path.exists(embeddings_file):
+    # read the segments
+    dev_metadata['cry'] = dev_metadata.apply(lambda row: read_audio(row['file_name']).numpy(), axis=1)
+    # concatenate all segments for each (baby_id, period) group
+    cry_dict = pd.DataFrame(dev_metadata.groupby(['baby_id', 'period'])['cry'].agg(lambda x: np.concatenate(x.values)),
+                            columns=['cry']).to_dict(orient='index')
+    # encode the concatenated cries
+    for (baby_id, period), d in tqdm(cry_dict.items()):
+        d['cry_encoded'] = extract_embeddings(d['cry'])
+
+    pathlib.Path(os.path.dirname(embeddings_file)).mkdir(parents=True, exist_ok=True)
+
+    # Iterate through the dictionary and move tensors to CPU
+    for key in cry_dict:
+        for sub_key in cry_dict[key]:
+            if isinstance(cry_dict[key][sub_key], torch.Tensor):
+                cry_dict[key][sub_key] = cry_dict[key][sub_key].to('cpu')
+
+    with open(embeddings_file, 'wb') as fp:
+        pickle.dump(cry_dict, fp)
+else:
+    with open(embeddings_file, 'rb') as fp:
+        cry_dict = pickle.load(fp)
+
 
 # #### Compute Similarity Between Encodings
 if metric == 'cosine':
@@ -255,8 +301,18 @@ with open('../data/overall/overall.csv', 'a') as f_object:
     f_object.close()
 
 
-get_ipython().run_cell_magic('time', '', "test_metadata = metadata.loc[metadata['split']=='test'].copy()\n# read the segments\ntest_metadata['cry'] = test_metadata.apply(lambda row: read_audio(row['file_name']).numpy(), axis=1)\n# concatenate all segments for each (baby_id, period) group\ncry_dict_test = pd.DataFrame(test_metadata.groupby(['baby_id', 'period'])['cry'].agg(lambda x: np.concatenate(x.values)), columns=['cry']).to_dict(orient='index')\n# encode the concatenated cries\nfor (baby_id, period), d in tqdm(cry_dict_test.items()):\n  d['cry_encoded'] = extract_embeddings(d['cry'])\n\n# compute cosine similarity between all pairs\ntest_pairs['score'] = test_pairs.apply(lambda row: compute_similarity_score(row=row, cry_dict=cry_dict_test), axis=1)\ndisplay(test_pairs.head())\n")
+test_metadata = metadata.loc[metadata['split']=='test'].copy()
+# read the segments
+test_metadata['cry'] = test_metadata.apply(lambda row: read_audio(row['file_name']).numpy(), axis=1)
+# concatenate all segments for each (baby_id, period) group
+cry_dict_test = pd.DataFrame(test_metadata.groupby(['baby_id', 'period'])['cry'].agg(lambda x: np.concatenate(x.values)), columns=['cry']).to_dict(orient='index')
+# encode the concatenated cries
+for (baby_id, period), d in tqdm(cry_dict_test.items()):
+  d['cry_encoded'] = extract_embeddings(d['cry'])
 
+# compute cosine similarity between all pairs
+test_pairs['score'] = test_pairs.apply(lambda row: compute_similarity_score(row=row, cry_dict=cry_dict_test), axis=1)
+display(test_pairs.head())
 
 #submission must match the 'sample_submission.csv' format exactly
 my_submission= test_pairs[['id', 'score']]
