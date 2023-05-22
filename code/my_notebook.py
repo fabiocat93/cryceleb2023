@@ -274,6 +274,7 @@ def compute_eer_and_plot_verification_scores(pairs_df):
     plt.axvline(x=[threshold], color='red', ls='--');
 
     # Save figure as SVG
+    pathlib.Path('../data/figures/').mkdir(parents=True, exist_ok=True)
     plt.savefig(f'../data/figures/{metric}_{encoder_name}.svg', format='svg')
     # Save figure as PNG
     plt.savefig(f'../data/figures/{metric}_{encoder_name}.png', format='png')
@@ -288,6 +289,7 @@ my_list = [encoder_name, metric, eer, threshold]
 
 # Open our existing CSV file in append mode
 # Create a file object for this file
+pathlib.Path('../data/overall/').mkdir(parents=True, exist_ok=True)
 with open('../data/overall/overall.csv', 'a') as f_object:
     # Pass this file object to csv.writer()
     # and get a writer object
