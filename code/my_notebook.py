@@ -302,7 +302,7 @@ with open('../data/overall/overall.csv', 'a') as f_object:
     # Close the file object
     f_object.close()
 
-
+'''
 test_metadata = metadata.loc[metadata['split']=='test'].copy()
 # read the segments
 test_metadata['cry'] = test_metadata.apply(lambda row: read_audio(row['file_name']).numpy(), axis=1)
@@ -322,6 +322,6 @@ my_submission_file = f'../data/results/{metric}_{encoder_name}.csv'
 pathlib.Path(os.path.dirname(my_submission_file)).mkdir(parents=True, exist_ok=True)
 my_submission.to_csv(my_submission_file, index=False)
 #display(my_submission.head())
-
+'''
 
 # You can now download `my_submission.csv` and submit it to the challenge!
