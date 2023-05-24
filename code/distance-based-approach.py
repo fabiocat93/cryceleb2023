@@ -21,6 +21,7 @@ parser.add_argument('--encoder', type=str, help='Encoder parameter')
 # wav2vec2 # 25 layers
 # data2vec2 # 25 layers
 # bookbot-wav2vec2-adult-child-cls # 13 layers
+# yangwang825-ecapa-tdnn-vox2 (https://huggingface.co/yangwang825/ecapa-tdnn-vox2)
 parser.add_argument('--metric', type=str, help='Metric parameter')
 # 'cosine' # 'cosine', 'euclidean', 'manhattan' (https://medium.com/@gshriya195/top-5-distance-similarity-measures-implementation-in-machine-learning-1f68b9ecb0a3, https://www.analyticsvidhya.com/blog/2020/02/4-types-of-distance-metrics-in-machine-learning/#h-minkowski-distance)
 
@@ -65,7 +66,7 @@ from pyannote.audio import Inference
 import serab_byols
 import s3prl.hub as s3hub
 #from transformers import Wav2Vec2Model, HubertModel, Data2VecAudioModel
-from transformers import AutoProcessor, AutoModelForAudioClassification
+from transformers import AutoProcessor, AutoModelForAudioClassification, AutoFeatureExtractor
 
 # ### Data
 
@@ -107,6 +108,17 @@ if not os.path.exists(embeddings_file):
         encoder = SpeakerRecognition.from_hparams(
             source="speechbrain/spkrec-ecapa-voxceleb",
             savedir=f"../data/models/spkrec-ecapa-voxceleb",
+            run_opts={"device": my_device}  # comment out if no GPU available
+        ).to(my_device)
+
+
+        def extract_embeddings(data):
+            return encoder.encode_batch(torch.tensor(data).to(my_device), normalize=False)
+
+    elif encoder_name == 'yangwang825-ecapa-tdnn-vox2':
+        encoder = SpeakerRecognition.from_hparams(
+            source="yangwang825/ecapa-tdnn-vox2",
+            savedir=f"../data/models/yangwang825-ecapa-tdnn-vox2",
             run_opts={"device": my_device}  # comment out if no GPU available
         ).to(my_device)
 
@@ -235,6 +247,26 @@ if not os.path.exists(embeddings_file):
         def extract_embeddings(data):
             output = encoder(torch.unsqueeze(torch.tensor(data), 0).to(my_device), output_hidden_states=True)
             embeddings = output.hidden_states[layer_number]
+            embeddings = embeddings.mean(1) + embeddings.amax(1)
+            embeddings = np.squeeze(embeddings.cpu().detach().numpy())
+            return embeddings
+
+    elif encoder_name.startswith('openai-whisper-large-v2'):
+        weights_file = 'openai/whisper-large-v2'
+        pathlib.Path('../data/models/huggingface/openai-whisper-large-v2').mkdir(parents=True, exist_ok=True)
+        encoder = AutoModelForAudioClassification.from_pretrained(weights_file,
+                                                                  cache_dir='../data/models/huggingface/openai-whisper-large-v2/').to(
+            my_device)
+        feature_extractor = AutoFeatureExtractor.from_pretrained(weights_file,
+                                                                 cache_dir='../data/models/huggingface/openai-whisper-large-v2/')
+
+        def extract_embeddings(data):
+            inputs = feature_extractor(
+                data, sampling_rate=16000, return_tensors="pt"
+            )
+            input_features = inputs.input_features
+            output = encoder(input_features.to(my_device), output_hidden_states=True)
+            embeddings = output.hidden_states[-1]
             embeddings = embeddings.mean(1) + embeddings.amax(1)
             embeddings = np.squeeze(embeddings.cpu().detach().numpy())
             return embeddings
